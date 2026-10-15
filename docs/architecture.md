@@ -43,7 +43,7 @@ flowchart LR
 | 語言 | TypeScript | 資料格式（訊息、名單）有型別檢查，寫錯會提前警告 |
 | 打包工具 | Vite | 設定少、速度快，輸出純靜態檔案，正好適合 GitHub Pages |
 | 畫面 | 原生 DOM（不用框架） | 畫面只有兩個頁面與一個訊息列表，不需要框架；檔案小，載入快 |
-| 後端 | Supabase | 一次提供資料庫（Postgres）、即時推送（Realtime）、匿名登入、在線狀態（Presence），且有免費方案 |
+| 後端 | Supabase | 一次提供資料庫（Postgres）、即時推送（Realtime）、匿名登入、在線狀態（Presence）、廣播（Broadcast，用於「正在輸入」），且有免費方案 |
 | 部署 | GitHub Pages + GitHub Actions | 免費，推到 main 就自動上架 |
 
 ## 4. 兩個階段，以及如何避免重寫
@@ -52,7 +52,9 @@ flowchart LR
 
 **階段二（接 Supabase）**：改用 `src/room.ts`。
 
-**插座設計**：畫面（`src/main.ts`）只透過 `src/service.ts` 的 `RoomService` 介面說話（`join`、`older`、`send`、`leave`，加上 `onPost`、`onMembers`、`onNotice`、`onStatus` 四個事件）。兩個階段各實作一次這個介面，由環境變數 `VITE_CHAT_MODE` 決定用哪一個（`live`＝Supabase，其他＝假後端）。所以從階段一到階段二，畫面一行都不用改。
+**插座設計**：畫面（`src/main.ts`）只透過 `src/service.ts` 的 `RoomService` 介面說話（指令：`join`、`older`、`send`、`notifyTyping`、`leave`；事件：`onPost`、`onMembers`、`onNotice`、`onStatus`、`onTyping`）。兩個階段各實作一次這個介面，由環境變數 `VITE_CHAT_MODE` 決定用哪一個（`live`＝Supabase，其他＝假後端）。所以從階段一到階段二，畫面一行都不用改。
+
+**階段一在 GitHub Pages 上怎麼看到**：`pages.yml` 平常（推到 `main`）部署 `live` 模式。要在 Pages 上放可操作的展示模式，到儲存庫 Actions → Deploy to GitHub Pages → **Run workflow**，把 `chat_mode` 選成 `demo` 再執行，打包時不連 Supabase，網頁上會顯示「展示模式」提示。要換回正式版，再用 `live` 執行一次（或再推一次 `main`）。本機只要不設定 `VITE_CHAT_MODE`（或設成 `demo`）執行 `npm run dev`，就是展示模式。
 
 ## 5. 訊息資料格式
 
@@ -124,6 +126,7 @@ sequenceDiagram
 | 聊天室：頂部 | 標題、「N 人在線」（點開是在線名單，自己標「（你）」）、「你是：代號#編號」、「離開」按鈕 |
 | 聊天室：提示 | 有人進來／離開的提示（6 秒，可疊加最多 3 則）；斷線時顯示「重新連線中…」 |
 | 聊天室：訊息區 | 舊的在上、新的在下；自己的靠右，顯示「傳送中／已送出／傳送失敗＋重試」；最上方「載入更早的訊息」，載完顯示「已經是最早的訊息」，失敗可重試；沒有訊息時顯示「還沒有人說話，來打個招呼吧」 |
+| 聊天室：正在輸入 | 輸入區上方一行「某某 正在輸入…」（2 人顯示兩個名字，3 人以上顯示「某某 等 N 人正在輸入…」）；5 秒沒更新或對方送出訊息就消失；固定佔一行高度，版面不會跳動 |
 | 聊天室：輸入區 | 多行輸入框（電腦 Enter 送出、Shift+Enter 換行）、字數「N / 500」、送出鈕；被頻率限制時顯示「發言太快了，請稍等幾秒」 |
 
 手機與電腦同一套畫面自動調整，無橫向捲軸。
@@ -155,6 +158,7 @@ sequenceDiagram
 **已知限制**
 - 代號可以重複（編號不同），單看代號可能混淆或冒用。
 - 在線名單裡別人的名稱來自對方的瀏覽器，惡意使用者繞過網頁可以掛別的名字（不影響訊息上的名稱）；前端只檢查格式。
+- 「正在輸入」訊號由各瀏覽器自己送出，沒有驗證來源，惡意使用者可以冒用別人的名稱；每個訊號都計入 Supabase 免費額度，所以送出端節流為每 3 秒最多一次。
 - 訊息永久保存，容量長期會增長；畫面一次只載入 50 則。
 - Supabase 免費方案：同時連線與每月即時訊息數有上限；專案閒置約一週會被暫停。
 
@@ -174,6 +178,7 @@ sequenceDiagram
 │  ├─ rules.ts               規則：清理、檢查、parsePost、頻率限制
 │  └─ style.css
 ├─ supabase/schema.sql       資料表、RLS、函式、trigger 的 SQL（手動貼到後台執行）
+├─ docs/requirements.md      需求說明
 ├─ docs/architecture.md      本文件
 ├─ .github/workflows/pages.yml  自動打包部署
 ├─ .env.example              環境變數範本（假值）
@@ -185,7 +190,8 @@ sequenceDiagram
 1. 儲存庫 Settings → Pages，Source 選 **GitHub Actions**。
 2. Settings → Secrets and variables → Actions，新增 `VITE_SUPABASE_URL`、`VITE_SUPABASE_PUBLISHABLE_KEY`。
 3. 推到 `main`，`pages.yml` 會設定 `VITE_BASE`（儲存庫名稱當子路徑）與 `VITE_CHAT_MODE=live`，打包後上架。
-4. Supabase 後台：Authentication → 打開 Allow anonymous sign-ins；SQL Editor 貼上 `supabase/schema.sql` 的內容執行。
+4. 展示模式（階段一）：Actions → Deploy to GitHub Pages → Run workflow → `chat_mode` 選 `demo`。
+5. Supabase 後台：Authentication → 打開 Allow anonymous sign-ins；SQL Editor 貼上 `supabase/schema.sql` 的內容執行。
 
 ## 13. 驗證清單
 
@@ -197,7 +203,7 @@ sequenceDiagram
 - [ ] 送出訊息：「傳送中」→「已送出」，只顯示一次
 - [ ] 快速連發出現「發言太快了」
 - [ ] 貼上 `<b>粗體</b>`：原樣顯示為文字
-- [ ] 機器人訊息自動進來；在線名單展開可看到自己（你）與其他人，有人進出時出現提示
+- [ ] 機器人發言前，輸入區上方先出現「某某 正在輸入…」；機器人訊息自動進來；在線名單展開可看到自己（你）與其他人，有人進出時出現提示
 - [ ] 按「離開」回到進入畫面，可換代號再進入
 - [ ] 手機寬度無橫向捲軸
 
@@ -205,7 +211,8 @@ sequenceDiagram
 - [ ] 第一次進入得到「代號#編號」，同一瀏覽器再進入編號不變；換瀏覽器編號不同
 - [ ] 兩個不同瀏覽器互傳訊息，1～2 秒內出現，不用重新整理
 - [ ] 在線名單互相看得到對方；對方進來／離開時看到提示；按「離開」後對方人數馬上減少
-- [ ] 往上載入更早的訊息、傳送失敗可重試
+- [ ] 一邊打字，另一邊看到「某某 正在輸入…」，停止約 5 秒後消失；對方送出時立刻消失；自己看不到自己的
+- [ ] 往上載入更早的訊息（訊息超過 50 則才會出現按鈕）、傳送失敗可重試
 - [ ] 繞過網頁直接送 501 字、空白訊息、偽造名稱：被拒絕或名稱仍由資料庫填
 - [ ] 短時間狂發被擋下，顯示「發言太快了」
 - [ ] 未登入直接讀寫被拒絕；沒有任何方式修改或刪除訊息

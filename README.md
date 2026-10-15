@@ -19,7 +19,8 @@
 | ③ 匿名登入＋資料庫產生的固定 3 碼編號 | 進入後頂部顯示「你是：小明#371」；同一瀏覽器再進入編號不變，換瀏覽器編號不同，無法自己指定。 |
 | ④ 傳送狀態與重試 | 自己的訊息下方依序顯示「傳送中…」→「已送出」；失敗顯示「傳送失敗」和「重試」按鈕，重送用同一個 id，不會重複。 |
 | ⑤ 字數計數器 | 輸入框下方即時顯示「0 / 500」，超過 500 字變紅色並停用送出鈕。 |
-| ⑥ 載入更早的訊息 | 進入時看到最近 50 則；按訊息區最上方的「載入更早的訊息」會載入更早 50 則，載完顯示「已經是最早的訊息」，失敗時按鈕變成「載入更早的訊息失敗，按一下重試」。 |
+| ⑥ 載入更早的訊息 | 進入時看到最近 50 則；聊天室累積超過 50 則後，訊息區最上方才會出現「載入更早的訊息」按鈕，按下會再載入 50 則，載完顯示「已經是最早的訊息」，失敗時按鈕變成「載入更早的訊息失敗，按一下重試」。 |
+| ⑦ 「正在輸入…」提示（Realtime Broadcast，和所有人即時同步） | 一邊在輸入框打字，另一邊在輸入框上方看到「某某 正在輸入…」；停止約 5 秒或對方送出訊息後消失。 |
 
 ## 基本功能
 
@@ -52,4 +53,6 @@ npm run dev
 
 推到 `main` 後，GitHub Actions（`.github/workflows/pages.yml`）自動打包並上架到 GitHub Pages。Project URL 與 publishable key 放在儲存庫 Settings → Secrets and variables → Actions（`VITE_SUPABASE_URL`、`VITE_SUPABASE_PUBLISHABLE_KEY`）。
 
-更多設計說明見 `docs/architecture.md`。
+展示模式（階段一）也能放上 Pages：Actions → Deploy to GitHub Pages → Run workflow，`chat_mode` 選 `demo`（說明見 `docs/architecture.md` 第 4、12 節）。
+
+需求見 `docs/requirements.md`，設計說明見 `docs/architecture.md`。

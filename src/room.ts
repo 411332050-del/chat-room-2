@@ -1,5 +1,5 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js'
-import { PAGE_SIZE, byTime, isNickname, parsePost, type Post } from './rules'
+import { PAGE_SIZE, TYPING_SEND_MS, byTime, isNickname, parsePost, type Post } from './rules'
 import type { Handlers, Member, RoomService } from './service'
 
 const COLUMNS = 'id, user_id, nickname, body, created_at'
@@ -13,6 +13,7 @@ export class Room implements RoomService {
   private giveUp: number | undefined
   private everOnline = false
   private closed = true
+  private lastTypingSent = 0
   private me: { userId: string; nickname: string } | null = null
   /** 上一次的在線名單，用來比對誰進來、誰離開 */
   private known: Map<string, string> | null = null
@@ -63,13 +64,14 @@ export class Room implements RoomService {
     return new Promise((resolve, reject) => {
       let first = true
       const timer = window.setTimeout(() => reject(new Error('連線逾時')), 12_000)
-      const channel = db.channel('room', { config: { presence: { key: userId } } })
+      const channel = db.channel('room', { config: { presence: { key: userId }, broadcast: { self: false } } })
       this.channel = channel
       channel
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'room_posts' }, (p) => {
           const post = parsePost(p.new)
           if (post) this.deliver(post)
         })
+        .on('broadcast', { event: 'typing' }, ({ payload }) => this.onTyping(payload))
         .on('presence', { event: 'sync' }, () => this.emitMembers(channel))
         .subscribe((status) => {
           if (this.closed || this.channel !== channel) return
@@ -116,6 +118,22 @@ export class Room implements RoomService {
       if (!next.has(id) && id !== this.me?.userId) this.on.onNotice({ kind: 'leave', nickname })
     }
     this.known = next
+  }
+
+  /** 別人的「正在輸入」訊號來自其他瀏覽器，先檢查格式才使用 */
+  private onTyping(payload: unknown): void {
+    const { id, nickname } = (payload ?? {}) as { id?: unknown; nickname?: unknown }
+    if (typeof id !== 'string' || id.length === 0 || id === this.me?.userId || !isNickname(nickname)) return
+    this.on.onTyping({ id, nickname })
+  }
+
+  notifyTyping(): void {
+    const channel = this.channel
+    if (!channel || !this.me || this.closed || channel.state !== 'joined') return
+    const now = Date.now()
+    if (now - this.lastTypingSent < TYPING_SEND_MS) return
+    this.lastTypingSent = now
+    void channel.send({ type: 'broadcast', event: 'typing', payload: { id: this.me.userId, nickname: this.me.nickname } })
   }
 
   /** 關閉分頁時盡量先通知「我離開了」 */

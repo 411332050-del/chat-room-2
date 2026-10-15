@@ -16,11 +16,18 @@ export interface Notice {
   nickname: string
 }
 
+/** 有人正在輸入（不含自己） */
+export interface Typing {
+  id: string
+  nickname: string
+}
+
 export interface Handlers {
   onPost: (post: Post) => void
   onMembers: (members: Member[]) => void
   onNotice: (notice: Notice) => void
   onStatus: (status: Status) => void
+  onTyping: (who: Typing) => void
 }
 
 /**
@@ -31,6 +38,8 @@ export interface RoomService {
   join(alias: string): Promise<{ userId: string; nickname: string; history: Post[] }>
   older(before: Post): Promise<{ posts: Post[]; done: boolean }>
   send(id: string, body: string): Promise<{ post?: Post; error?: string }>
+  /** 告訴大家「我正在輸入」。服務自己會節流（最多每 3 秒一次），畫面可以每次輸入都呼叫 */
+  notifyTyping(): void
   leave(): void
 }
 

@@ -1,6 +1,6 @@
 import './style.css'
-import { LIVE, createRoom, type Member, type Notice, type Status } from './service'
-import { BODY_MAX, aliasProblem, byTime, cleanAlias, cleanBody, explain, length, type Post } from './rules'
+import { LIVE, createRoom, type Member, type Notice, type Status, type Typing } from './service'
+import { BODY_MAX, TYPING_SHOW_MS, aliasProblem, byTime, cleanAlias, cleanBody, explain, length, type Post } from './rules'
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
 
@@ -36,6 +36,7 @@ const room = createRoom({
   onMembers: renderMembers,
   onNotice: showNotice,
   onStatus: onStatus,
+  onTyping: showTyping,
 })
 
 if (!LIVE) $('demo-note').hidden = false
@@ -83,6 +84,30 @@ function showNotice(n: Notice): void {
   window.setTimeout(() => line.remove(), 6000)
 }
 
+// ---------- 正在輸入 ----------
+
+const typers = new Map<string, { nickname: string; timer: number }>()
+const typingEl = $('typing')
+
+function drawTyping(): void {
+  const names = [...typers.values()].map((t) => t.nickname)
+  typingEl.textContent =
+    names.length === 0 ? '' : names.length === 1 ? `${names[0]} 正在輸入…`
+    : names.length === 2 ? `${names[0]}、${names[1]} 正在輸入…` : `${names[0]} 等 ${names.length} 人正在輸入…`
+}
+
+function showTyping(who: Typing): void {
+  window.clearTimeout(typers.get(who.id)?.timer)
+  typers.set(who.id, { nickname: who.nickname, timer: window.setTimeout(() => clearTyper(who.id), TYPING_SHOW_MS) })
+  drawTyping()
+}
+
+function clearTyper(id: string): void {
+  window.clearTimeout(typers.get(id)?.timer)
+  typers.delete(id)
+  drawTyping()
+}
+
 // ---------- 進入畫面 ----------
 
 function checkAlias(): string | null {
@@ -124,6 +149,9 @@ async function enter(alias: string): Promise<void> {
 
 $('leave-btn').addEventListener('click', () => {
   room.leave()
+  typers.forEach((t) => window.clearTimeout(t.timer))
+  typers.clear()
+  drawTyping()
   noticesEl.replaceChildren()
   memberList.hidden = true
   roomEl.hidden = true
@@ -148,6 +176,7 @@ function onStatus(status: Status): void {
 // ---------- 訊息列表 ----------
 
 function upsert(post: Post): void {
+  clearTyper(post.userId)
   const prev = items.get(post.id)
   items.set(post.id, { ...post, state: 'sent', mine: post.userId === myId })
   render(prev === undefined && (post.userId === myId || nearBottom()))
@@ -241,7 +270,10 @@ function updateComposer(): void {
   countEl.classList.toggle('over', n > BODY_MAX)
   sendBtn.disabled = n === 0 || n > BODY_MAX
 }
-msgInput.addEventListener('input', updateComposer)
+msgInput.addEventListener('input', () => {
+  updateComposer()
+  if (msgInput.value.trim().length > 0) room.notifyTyping()
+})
 updateComposer()
 
 msgInput.addEventListener('keydown', (e) => {

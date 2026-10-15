@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      chat_mode:
+        description: 'live＝連 Supabase（階段二）；demo＝展示模式（階段一的假後端，不需要金鑰）'
+        type: choice
+        options: [live, demo]
+        default: live
 
 permissions:
   contents: read
@@ -27,7 +33,7 @@ jobs:
       - run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
-          VITE_CHAT_MODE: live
+          VITE_CHAT_MODE: ${{ inputs.chat_mode || 'live' }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - uses: actions/configure-pages@v5

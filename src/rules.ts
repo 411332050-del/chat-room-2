@@ -99,3 +99,8 @@ export class RateLimiter {
 export function isNickname(v: unknown): v is string {
   return typeof v === 'string' && length(v) >= 1 && length(v) <= 20
 }
+
+/** 「正在輸入」訊號最多每隔這麼久送一次（控制即時流量） */
+export const TYPING_SEND_MS = 3000
+/** 收到訊號後，這麼久沒再收到、或對方送出訊息，就不再顯示 */
+export const TYPING_SHOW_MS = 5000

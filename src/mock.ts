@@ -1,4 +1,4 @@
-import { PAGE_SIZE, RateLimiter, byTime, cleanBody, parsePost, validateBody, type Post } from './rules'
+import { PAGE_SIZE, RateLimiter, TYPING_SEND_MS, isNickname, byTime, cleanBody, parsePost, validateBody, type Post } from './rules'
 import type { Handlers, Member, RoomService } from './service'
 
 // 階段一的假後端：所有資料只存在這個瀏覽器（localStorage），
@@ -22,6 +22,7 @@ type Wire =
   | { t: 'post'; post: Post }
   | { t: 'here'; tab: string; member: Member; reply: boolean }
   | { t: 'bye'; tab: string }
+  | { t: 'typing'; member: Member }
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -70,6 +71,7 @@ export class MockRoom implements RoomService {
   private known: Map<string, string> | null = null
   private timers: number[] = []
   private limiter = new RateLimiter()
+  private lastTypingSent = 0
 
   constructor(private on: Handlers) {}
 
@@ -120,6 +122,14 @@ export class MockRoom implements RoomService {
     return { post }
   }
 
+  notifyTyping(): void {
+    if (!this.me || !this.channel) return
+    const now = Date.now()
+    if (now - this.lastTypingSent < TYPING_SEND_MS) return
+    this.lastTypingSent = now
+    this.channel.postMessage({ t: 'typing', member: this.me } satisfies Wire)
+  }
+
   leave(): void {
     this.channel?.postMessage({ t: 'bye', tab: this.tab } satisfies Wire)
     this.channel?.close()
@@ -152,6 +162,9 @@ export class MockRoom implements RoomService {
       if (w.member?.id && w.member.id !== this.me?.id) this.others.set(w.tab, w.member)
       if (w.reply && this.me) this.channel?.postMessage({ t: 'here', tab: this.tab, member: this.me, reply: false } satisfies Wire)
       this.emitMembers()
+    } else if (w.t === 'typing') {
+      const { id, nickname } = w.member ?? ({} as Partial<Member>)
+      if (typeof id === 'string' && id !== this.me?.id && isNickname(nickname)) this.on.onTyping({ id, nickname })
     } else if (w.t === 'bye') {
       this.others.delete(w.tab)
       this.emitMembers()
@@ -183,12 +196,18 @@ export class MockRoom implements RoomService {
     // 機器人偶爾發言
     loop(() => {
       const bot = BOTS[Math.floor(Math.random() * BOTS.length)]
-      const post: Post = {
-        id: crypto.randomUUID(), userId: bot.id, nickname: bot.nickname,
-        body: LINES[Math.floor(Math.random() * LINES.length)], createdAt: new Date().toISOString(),
-      }
-      this.store(post)
-      this.on.onPost(post)
+      // 機器人先「正在輸入」一下，再發言
+      this.on.onTyping({ id: bot.id, nickname: bot.nickname })
+      this.timers.push(
+        window.setTimeout(() => {
+          const post: Post = {
+            id: crypto.randomUUID(), userId: bot.id, nickname: bot.nickname,
+            body: LINES[Math.floor(Math.random() * LINES.length)], createdAt: new Date().toISOString(),
+          }
+          this.store(post)
+          this.on.onPost(post)
+        }, 2000),
+      )
     }, 12_000, 25_000)
     // 機器人隨機進出，至少留 1 個
     loop(() => {
