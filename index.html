@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1f1c" />
+    <title>匿名聊天室</title>
+  </head>
+  <body>
+    <!-- 第一個看到的畫面：輸入代號，按「進入聊天室」才連線 -->
+    <main id="entry" class="entry">
+      <form id="entry-form" class="entry__form" novalidate>
+        <h1>匿名聊天室</h1>
+        <p class="entry__lead">不用註冊，取個代號就能加入。</p>
+        <label for="alias">代號</label>
+        <input id="alias" name="alias" placeholder="輸入你的代號" maxlength="12" autocomplete="off" autofocus />
+        <p id="alias-problem" class="problem" role="status"></p>
+        <button type="submit" id="enter-btn">進入聊天室</button>
+      </form>
+    </main>
+
+    <!-- 聊天室 -->
+    <section id="room" class="room" hidden>
+      <header class="room__top">
+        <div>
+          <strong class="room__title">匿名聊天室</strong>
+          <span id="online" class="room__online">0 人在線</span>
+        </div>
+        <div class="room__me">
+          你是：<span id="me-name"></span>
+          <button type="button" id="leave-btn" class="ghost">離開</button>
+        </div>
+      </header>
+      <div id="status" class="status" role="status" hidden></div>
+      <div id="scroller" class="room__scroll">
+        <button type="button" id="older-btn" class="ghost older" hidden>載入更早的訊息</button>
+        <p id="older-note" class="older-note" hidden></p>
+        <ol id="messages" class="messages"></ol>
+      </div>
+      <form id="send-form" class="composer">
+        <p id="send-hint" class="problem" role="status"></p>
+        <div class="composer__row">
+          <label for="msg" class="sr-only">輸入訊息</label>
+          <textarea id="msg" rows="2" placeholder="說點什麼…" maxlength="600"></textarea>
+          <button type="submit" id="send-btn">送出</button>
+        </div>
+        <span id="count" class="count">0 / 500</span>
+      </form>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
