@@ -47,7 +47,7 @@ button[type='submit']:disabled { background: var(--line); color: var(--muted); c
   gap: 6px 16px; padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
 }
 .room__title { font-size: 17px; }
-.room__online { margin-left: 10px; font-size: 13px; color: var(--muted); }
+.room__online { margin-left: 10px; padding: 2px 8px; font-size: 13px; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
 .room__me { font-size: 13px; color: var(--muted); }
 #me-name { color: var(--amber); font-weight: 700; margin-right: 8px; }
 .status { padding: 6px 16px; text-align: center; font-size: 13px; background: #3a2f12; color: #ffd98a; }
@@ -79,3 +79,13 @@ button[type='submit']:disabled { background: var(--line); color: var(--muted); c
 }
 .count { display: block; text-align: right; margin-top: 2px; font-size: 12px; color: var(--muted); }
 .count.over { color: var(--danger); }
+
+.member-list {
+  flex: none; list-style: none; margin: 0; padding: 8px 16px; max-height: 28vh; overflow-y: auto;
+  background: var(--bg); border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1.9; color: var(--muted);
+}
+.member-list .you { color: var(--amber); }
+.notices { flex: none; }
+.notices:empty { display: none; }
+.notices div { padding: 4px 16px; text-align: center; font-size: 12px; color: var(--muted); background: var(--panel); border-bottom: 1px dashed var(--line); }
+.demo-note { margin: 12px 0 0; padding: 8px 10px; font-size: 12px; color: #ffd98a; background: #3a2f12; border-radius: 6px; }

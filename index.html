@@ -16,6 +16,7 @@
         <input id="alias" name="alias" placeholder="輸入你的代號" maxlength="12" autocomplete="off" autofocus />
         <p id="alias-problem" class="problem" role="status"></p>
         <button type="submit" id="enter-btn">進入聊天室</button>
+        <p id="demo-note" class="demo-note" hidden>展示模式：訊息只存在你的瀏覽器，不會傳給其他裝置。</p>
       </form>
     </main>
 
@@ -24,13 +25,15 @@
       <header class="room__top">
         <div>
           <strong class="room__title">匿名聊天室</strong>
-          <span id="online" class="room__online">0 人在線</span>
+          <button type="button" id="online" class="room__online" aria-expanded="false" aria-controls="member-list">0 人在線 ▾</button>
         </div>
         <div class="room__me">
           你是：<span id="me-name"></span>
           <button type="button" id="leave-btn" class="ghost">離開</button>
         </div>
       </header>
+      <ul id="member-list" class="member-list" aria-label="在線名單" hidden></ul>
+      <div id="notices" class="notices" role="status" aria-live="polite"></div>
       <div id="status" class="status" role="status" hidden></div>
       <div id="scroller" class="room__scroll">
         <button type="button" id="older-btn" class="ghost older" hidden>載入更早的訊息</button>

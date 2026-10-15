@@ -1,25 +1,21 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js'
-import { PAGE_SIZE, byTime, parsePost, type Post } from './rules'
-
-export type Status = 'online' | 'reconnecting' | 'lost'
-
-export interface Handlers {
-  onPost: (post: Post) => void
-  onOnline: (count: number) => void
-  onStatus: (status: Status) => void
-}
+import { PAGE_SIZE, byTime, isNickname, parsePost, type Post } from './rules'
+import type { Handlers, Member, RoomService } from './service'
 
 const COLUMNS = 'id, user_id, nickname, body, created_at'
 const GIVE_UP_MS = 60_000
 
 /** 跟 Supabase 說話的一層。畫面（main.ts）只透過這裡取得資料。 */
-export class Room {
+export class Room implements RoomService {
   private client: SupabaseClient | null = null
   private channel: RealtimeChannel | null = null
   private lastSeen: string | null = null
   private giveUp: number | undefined
   private everOnline = false
   private closed = true
+  private me: { userId: string; nickname: string } | null = null
+  /** 上一次的在線名單，用來比對誰進來、誰離開 */
+  private known: Map<string, string> | null = null
 
   constructor(
     private url: string,
@@ -38,6 +34,7 @@ export class Room {
     this.leave()
     this.closed = false
     this.everOnline = false
+    this.known = null
     const db = this.db()
 
     const { data: s } = await db.auth.getSession()
@@ -52,7 +49,9 @@ export class Room {
     const me = Array.isArray(rows) ? rows[0] : null
     if (error || !me) throw error ?? new Error('進入失敗')
 
+    this.me = { userId: me.member_id as string, nickname: me.nickname as string }
     await db.realtime.setAuth(session.access_token)
+    window.addEventListener('pagehide', this.onPageHide)
     await this.subscribe(me.member_id as string)
     const history = await this.fetchLatest()
     this.everOnline = true
@@ -71,11 +70,11 @@ export class Room {
           const post = parsePost(p.new)
           if (post) this.deliver(post)
         })
-        .on('presence', { event: 'sync' }, () => this.on.onOnline(Object.keys(channel.presenceState()).length))
+        .on('presence', { event: 'sync' }, () => this.emitMembers(channel))
         .subscribe((status) => {
           if (this.closed || this.channel !== channel) return
           if (status === 'SUBSCRIBED') {
-            void channel.track({ at: Date.now() })
+            void channel.track({ nickname: this.me?.nickname ?? '', at: Date.now() })
             window.clearTimeout(timer)
             if (first) {
               first = false
@@ -93,6 +92,35 @@ export class Room {
           }
         })
     })
+  }
+
+  /** 整理在線名單並比對出誰進來、誰離開。基準名單等「自己」出現在名單裡才建立，之後每次變動都提示。 */
+  private emitMembers(channel: RealtimeChannel): void {
+    const state = channel.presenceState() as Record<string, Array<{ nickname?: unknown }>>
+    const members: Member[] = []
+    for (const [id, metas] of Object.entries(state)) {
+      const nickname = id === this.me?.userId ? this.me.nickname : metas[metas.length - 1]?.nickname
+      if (isNickname(nickname)) members.push({ id, nickname })
+    }
+    this.on.onMembers(members)
+
+    const next = new Map(members.map((m) => [m.id, m.nickname]))
+    if (this.known === null) {
+      if (this.me && next.has(this.me.userId)) this.known = next
+      return
+    }
+    for (const [id, nickname] of next) {
+      if (!this.known.has(id) && id !== this.me?.userId) this.on.onNotice({ kind: 'join', nickname })
+    }
+    for (const [id, nickname] of this.known) {
+      if (!next.has(id) && id !== this.me?.userId) this.on.onNotice({ kind: 'leave', nickname })
+    }
+    this.known = next
+  }
+
+  /** 關閉分頁時盡量先通知「我離開了」 */
+  private onPageHide = () => {
+    void this.channel?.untrack()
   }
 
   private deliver(post: Post): void {
@@ -173,6 +201,8 @@ export class Room {
   }
 
   leave(): void {
+    window.removeEventListener('pagehide', this.onPageHide)
+    this.known = null
     this.closed = true
     window.clearTimeout(this.giveUp)
     this.giveUp = undefined

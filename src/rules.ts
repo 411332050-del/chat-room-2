@@ -74,3 +74,28 @@ export function explain(code: string): string {
     default: return '送出失敗，請重試'
   }
 }
+
+/** 送出前的檢查；回傳錯誤代碼，通過回傳 null */
+export function validateBody(body: string): 'EMPTY' | 'TOO_LONG' | null {
+  if (body.length === 0) return 'EMPTY'
+  if (length(body) > BODY_MAX) return 'TOO_LONG'
+  return null
+}
+
+/** 頻率限制（假後端用，規則與資料庫一致）：10 秒最多 5 則，兩則至少間隔 0.5 秒 */
+export class RateLimiter {
+  private sent: number[] = []
+
+  tryConsume(now = Date.now()): boolean {
+    this.sent = this.sent.filter((t) => now - t < 10_000)
+    const last = this.sent[this.sent.length - 1]
+    if (this.sent.length >= 5 || (last !== undefined && now - last < 500)) return false
+    this.sent.push(now)
+    return true
+  }
+}
+
+/** 在線名單裡別人的名稱來自對方的瀏覽器，先檢查格式才使用 */
+export function isNickname(v: unknown): v is string {
+  return typeof v === 'string' && length(v) >= 1 && length(v) <= 20
+}

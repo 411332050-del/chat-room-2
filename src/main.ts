@@ -1,5 +1,5 @@
 import './style.css'
-import { Room, type Status } from './room'
+import { LIVE, createRoom, type Member, type Notice, type Status } from './service'
 import { BODY_MAX, aliasProblem, byTime, cleanAlias, cleanBody, explain, length, type Post } from './rules'
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
@@ -28,16 +28,60 @@ interface Item extends Post {
   mine: boolean
 }
 
-const room = new Room(import.meta.env.VITE_SUPABASE_URL ?? '', import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '', {
+const memberList = $('member-list')
+const noticesEl = $('notices')
+
+const room = createRoom({
   onPost: (post) => upsert(post),
-  onOnline: (n) => (onlineEl.textContent = `${n} 人在線`),
+  onMembers: renderMembers,
+  onNotice: showNotice,
   onStatus: onStatus,
 })
+
+if (!LIVE) $('demo-note').hidden = false
 
 let myId = ''
 let items = new Map<string, Item>()
 let reachedEnd = false
 let hintTimer = 0
+
+// ---------- 在線名單與進出提示 ----------
+
+function renderMembers(members: Member[]): void {
+  onlineEl.textContent = `${members.length} 人在線 ${memberList.hidden ? '▾' : '▴'}`
+  memberList.replaceChildren(
+    ...[...members]
+      .sort((a, b) => (a.id === myId ? -1 : b.id === myId ? 1 : a.nickname.localeCompare(b.nickname, 'zh-Hant')))
+      .map((m) => {
+        const li = document.createElement('li')
+        li.textContent = m.nickname
+        if (m.id === myId) {
+          const you = document.createElement('span')
+          you.className = 'you'
+          you.textContent = '（你）'
+          li.append(you)
+        }
+        return li
+      }),
+  )
+  memberCount = members.length
+}
+
+let memberCount = 0
+onlineEl.addEventListener('click', () => {
+  memberList.hidden = !memberList.hidden
+  onlineEl.setAttribute('aria-expanded', String(!memberList.hidden))
+  onlineEl.textContent = `${memberCount} 人在線 ${memberList.hidden ? '▾' : '▴'}`
+})
+
+/** 提示可以疊加（最多同時 3 則），各自 6 秒後消失 */
+function showNotice(n: Notice): void {
+  const line = document.createElement('div')
+  line.textContent = `${n.nickname} ${n.kind === 'join' ? '進來了' : '離開了'}`
+  noticesEl.append(line)
+  while (noticesEl.children.length > 3) noticesEl.firstElementChild?.remove()
+  window.setTimeout(() => line.remove(), 6000)
+}
 
 // ---------- 進入畫面 ----------
 
@@ -80,6 +124,8 @@ async function enter(alias: string): Promise<void> {
 
 $('leave-btn').addEventListener('click', () => {
   room.leave()
+  noticesEl.replaceChildren()
+  memberList.hidden = true
   roomEl.hidden = true
   entry.hidden = false
   aliasProblemEl.textContent = ''
